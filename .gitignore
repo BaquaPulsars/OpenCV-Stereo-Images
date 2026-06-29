@@ -1,0 +1,13 @@
+# Middlebury dataset folders
+*-imperfect/
+*-perfect/
+
+# Exported point clouds
+*.ply
+*.pcd
+*.xyz
+*.pts
+
+# Python
+__pycache__/
+*.pyc
