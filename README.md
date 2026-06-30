@@ -4,6 +4,9 @@ A stereo disparity pipeline built with OpenCV and Python. Supports the Middlebur
 
 ## Requirements
 
+- Python 3.8 or newer
+- Git (to clone the repo)
+
 ```bash
 pip install opencv-contrib-python numpy open3d
 ```
