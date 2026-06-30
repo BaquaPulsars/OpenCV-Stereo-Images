@@ -20,7 +20,7 @@ import numpy as np
 # Click anywhere on the disparity window to measure depth at that point.
 # ---------------------------------------------------------------------------
 
-SCENES_DIR  = r"c:\Users\ohlri\Downloads\Py\OpenCV"
+SCENES_DIR  = os.path.dirname(os.path.abspath(__file__))
 BASE_URL    = "https://vision.middlebury.edu/stereo/data/scenes2014/zip"
 SCALE       = 0.25
 DISP_WINDOW = "Disparity (click to measure)"
