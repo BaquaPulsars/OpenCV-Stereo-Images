@@ -25,6 +25,18 @@ BASE_URL    = "https://vision.middlebury.edu/stereo/data/scenes2014/zip"
 SCALE       = 0.25
 DISP_WINDOW = "Disparity (click to measure)"
 
+WIN_W  = 540   # display width per window  (3 cols × 2 rows fits 1080p)
+WIN_H  = 415   # display height per window
+PAD    = 8     # gap between windows
+TITLE  = 38    # approximate title bar height
+
+
+def show(name, img, col, row):
+    cv2.namedWindow(name, cv2.WINDOW_NORMAL)
+    cv2.imshow(name, img)
+    cv2.resizeWindow(name, WIN_W, WIN_H)
+    cv2.moveWindow(name, col * (WIN_W + PAD), row * (WIN_H + TITLE + PAD))
+
 SCENES = [
     "Adirondack", "Backpack",  "Bicycle1",  "Cable",     "Classroom1",
     "Couch",      "Flowers",   "Jadeplant", "Mask",      "Motorcycle",
@@ -189,8 +201,8 @@ else:
 gray0 = cv2.cvtColor(img0, cv2.COLOR_BGR2GRAY)
 gray1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
 
-cv2.imshow("Left image",  img0)
-cv2.imshow("Right image", img1)
+show("Left image",  img0, col=0, row=0)
+show("Right image", img1, col=1, row=0)
 cv2.waitKey(1)
 
 # --- Compute disparity ---
@@ -217,9 +229,7 @@ if args.wls:
     wls           = cv2.ximgproc.createDisparityWLSFilter(matcher_left=stereo)
     wls.setLambda(8000)
     wls.setSigmaColor(1.5)
-    disp_active   = np.clip(wls.filter(disp_left, gray0, disparity_map_right=disp_right), 0, None)
-    cv2.imshow("Disparity — raw",          to_heatmap(disp_left[:, ndisp:]))
-    cv2.imshow("Disparity — WLS filtered", to_heatmap(disp_active[:, ndisp:]))
+    disp_active = np.clip(wls.filter(disp_left, gray0, disparity_map_right=disp_right), 0, None)
     cv2.waitKey(1)
 else:
     disp_active = disp_left
@@ -268,8 +278,8 @@ if has_calib and depth_mm is not None:
     cv2.putText(disp_color, f"{depth_mm[h//2, w//2]/1000:.2f} m",
                 (w//2 + 12, h//2), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
 
-cv2.imshow("Left image (valid region)", img0_c)
-cv2.imshow(DISP_WINDOW, disp_color)
+show("Left image (valid region)", img0_c,    col=0, row=1)
+show(DISP_WINDOW,                 disp_color, col=1, row=1)
 cv2.setMouseCallback(DISP_WINDOW, on_mouse, (disp_c, focal_scaled, baseline_mm))
 print(f'Click on "{DISP_WINDOW}" to measure depth at any point.')
 
@@ -284,17 +294,34 @@ if args.inpaint:
         ).flatten().astype(np.uint8)
     inpaint_mask = (~valid_mask).astype(np.uint8) * 255
     disp_filled  = cv2.inpaint(disp_u8, inpaint_mask, inpaintRadius=5, flags=cv2.INPAINT_TELEA)
-    cv2.imshow("Inpainted disparity (full width)", cv2.applyColorMap(disp_filled, cv2.COLORMAP_TURBO))
     n = int(inpaint_mask.sum() / 255)
     print(f"Filled {n:,} pixels ({100*n/disp_active.size:.1f}%). Left-strip values are extrapolated, not real.")
+    inpainted_img = cv2.applyColorMap(disp_filled, cv2.COLORMAP_TURBO)
 
 # --- Ground truth + error map (dataset only) ---
+gt_img    = None
+error_img = None
 if gt_c is not None:
-    valid    = (gt_c > 0) & (disp_c > 0) & np.isfinite(gt_c) & np.isfinite(disp_c)
-    error    = np.abs(disp_c - gt_c)
+    valid     = (gt_c > 0) & (disp_c > 0) & np.isfinite(gt_c) & np.isfinite(disp_c)
+    error     = np.abs(disp_c - gt_c)
     print(f"Mean disparity error vs ground truth: {error[valid].mean():.2f} px")
-    cv2.imshow("Ground truth disparity",      to_heatmap(gt_c))
-    cv2.imshow("Error map (vs ground truth)", to_heatmap(np.where(valid, error, 0), cv2.COLORMAP_HOT))
+    gt_img    = to_heatmap(gt_c)
+    error_img = to_heatmap(np.where(valid, error, 0), cv2.COLORMAP_HOT)
+
+# --- Extra windows: fill columns 2, 3, ... with 2 rows each ---
+# Each pair of extras shares a column (row 0 and row 1).
+extras = []
+if args.wls:
+    extras.append(("Disparity — raw",           to_heatmap(disp_left[:, c:])))
+    extras.append(("Disparity — WLS filtered",  to_heatmap(disp_active[:, c:])))
+if args.inpaint:
+    extras.append(("Inpainted disparity",        inpainted_img))
+if gt_img is not None:
+    extras.append(("Ground truth disparity",     gt_img))
+    extras.append(("Error map (vs ground truth)", error_img))
+
+for i, (name, img) in enumerate(extras):
+    show(name, img, col=2 + (i // 2), row=i % 2)
 
 # --- Point cloud ---
 if (args.open3d or args.export) and has_calib:
